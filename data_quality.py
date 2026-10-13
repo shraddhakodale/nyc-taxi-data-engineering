@@ -1,7 +1,9 @@
+
 import os
 import psycopg2
 
 TABLE = "yellow_taxi_data_2025"
+
 
 def main():
     conn = psycopg2.connect(
@@ -14,19 +16,48 @@ def main():
     )
 
     try:
-        # Safety: this connection is read-only.
+        # Read-only: this script does not modify taxi data.
         conn.set_session(readonly=True, autocommit=True)
 
         checks = {
             "Total records": "COUNT(*)",
-            "Missing pickup timestamp": "COUNT(*) FILTER (WHERE tpep_pickup_datetime IS NULL)",
-            "Missing dropoff timestamp": "COUNT(*) FILTER (WHERE tpep_dropoff_datetime IS NULL)",
-            "Missing pickup location": "COUNT(*) FILTER (WHERE pulocationid IS NULL)",
-            "Missing dropoff location": "COUNT(*) FILTER (WHERE dolocationid IS NULL)",
-            "Missing trip distance": "COUNT(*) FILTER (WHERE trip_distance IS NULL)",
-            "Negative trip distance": "COUNT(*) FILTER (WHERE trip_distance < 0)",
-            "Negative fare amount": "COUNT(*) FILTER (WHERE fare_amount < 0)",
-            "Negative total amount": "COUNT(*) FILTER (WHERE total_amount < 0)",
+            "Missing pickup timestamp": (
+                "COUNT(*) FILTER (WHERE tpep_pickup_datetime IS NULL)"
+            ),
+            "Missing dropoff timestamp": (
+                "COUNT(*) FILTER (WHERE tpep_dropoff_datetime IS NULL)"
+            ),
+            "Missing pickup location": (
+                "COUNT(*) FILTER (WHERE pulocationid IS NULL)"
+            ),
+            "Missing dropoff location": (
+                "COUNT(*) FILTER (WHERE dolocationid IS NULL)"
+            ),
+            "Missing trip distance": (
+                "COUNT(*) FILTER (WHERE trip_distance IS NULL)"
+            ),
+            "Negative trip distance": (
+                "COUNT(*) FILTER (WHERE trip_distance < 0)"
+            ),
+            "Negative fare amount": (
+                "COUNT(*) FILTER (WHERE fare_amount < 0)"
+            ),
+            "Negative total amount": (
+                "COUNT(*) FILTER (WHERE total_amount < 0)"
+            ),
+            "Zero-distance trips": (
+                "COUNT(*) FILTER (WHERE trip_distance = 0)"
+            ),
+            "Zero-distance with negative fare": (
+                "COUNT(*) FILTER (WHERE trip_distance = 0 AND fare_amount < 0)"
+            ),
+            "Large negative fares (<= -100)": (
+                "COUNT(*) FILTER (WHERE fare_amount <= -100)"
+            ),
+            "Invalid payment type": (
+                "COUNT(*) FILTER (WHERE payment_type NOT IN (0, 1, 2, 3, 4) "
+                "OR payment_type IS NULL)"
+            ),
             "Dropoff before pickup": (
                 "COUNT(*) FILTER (WHERE tpep_pickup_datetime IS NOT NULL "
                 "AND tpep_dropoff_datetime IS NOT NULL "
@@ -35,9 +66,8 @@ def main():
         }
 
         with conn.cursor() as cur:
-            cur.execute(
-                "SELECT " + ", ".join(checks.values()) + f" FROM {TABLE}"
-            )
+            query = "SELECT " + ", ".join(checks.values()) + f" FROM {TABLE}"
+            cur.execute(query)
             values = cur.fetchone()
 
         print("\n=== NYC TAXI DATA QUALITY REPORT ===")
@@ -46,14 +76,22 @@ def main():
         for label, value in zip(checks.keys(), values):
             print(f"{label}: {value:,}")
 
-        issues = sum(value for label, value in zip(checks.keys(), values)
-                     if label != "Total records")
+        issues = sum(
+            value
+            for label, value in zip(checks.keys(), values)
+            if label != "Total records"
+        )
 
-        print("\nOverall result:", "CHECK ISSUES" if issues else "BASIC CHECKS PASSED")
+        print(
+            "\nOverall result:",
+            "CHECK ISSUES" if issues else "BASIC CHECKS PASSED",
+        )
         print("Note: counts can overlap; this is a basic validation report.")
 
     finally:
         conn.close()
 
+
 if __name__ == "__main__":
     main()
+
